@@ -991,8 +991,7 @@ struct _VteappWindowClass {
 static GType vteapp_window_get_type(void);
 
 static char const* const builtin_dingus[] = {
-        "(((gopher|news|telnet|nntp|file|http|ftp|https)://)|(www|ftp)[-A-Za-z0-9]*\\.)[-A-Za-z0-9\\.]+(:[0-9]*)?",
-        "(((gopher|news|telnet|nntp|file|http|ftp|https)://)|(www|ftp)[-A-Za-z0-9]*\\.)[-A-Za-z0-9\\.]+(:[0-9]*)?/[-A-Za-z0-9_\\$\\.\\+\\!\\*\\(\\),;:@&=\\?/~\\#\\%]*[^]'\\.}>\\) ,\\\"]",
+        "(foo|bar|baz)+",
         nullptr,
 };
 
@@ -1030,6 +1029,12 @@ vteapp_window_add_dingus(VteappWindow* window,
                 if (tag != -1)
                         vte_terminal_match_set_cursor_name(window->terminal, tag, "pointer");
         }
+}
+
+static void
+vteapp_window_add_builtin_dingus(VteappWindow* window)
+{
+        vte_terminal_match_add_builtins(window->terminal);
 }
 
 static void
@@ -1955,8 +1960,10 @@ vteapp_window_constructed(GObject *object)
                 gtk_widget_set_opacity (GTK_WIDGET (window), options.get_alpha());
 
         /* Dingus */
-        if (!options.no_builtin_dingus)
+        if (!options.no_builtin_dingus) {
                 vteapp_window_add_dingus(window, builtin_dingus);
+                vteapp_window_add_builtin_dingus(window);
+        }
         if (options.dingus != nullptr)
                 vteapp_window_add_dingus(window, options.dingus);
 

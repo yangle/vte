@@ -8828,7 +8828,10 @@ Terminal::draw_rows(VteScreen *screen_,
 
 		row_data = find_row_data(row);
                 if (row_data == nullptr)
-                        continue; /* Skip row. */
+                        continue; /* Skip row. FIXME: just paint this row empty? */
+
+                /* Clip to the line, so no drawing over adjacent lines happens */
+                _vte_draw_autoclip_t clipper{m_draw, &rect};
 
                 i = j = 0;
                 /* Walk the line.
@@ -8866,23 +8869,8 @@ Terminal::draw_rows(VteScreen *screen_,
                          * match the first one in this set. */
                         i = j;
                 } while (i < column_count);
-        }
 
-
-        /* Render the text. */
-        rect = cairo_rectangle_int_t{-m_padding.left, start_y, rect_width, row_height}; /* reset rect */
-        for (row = start_row, y = start_y; row < end_row; row++, y += row_height, rect.y = y) {
-                /* Check whether we need to draw this row at all */
-                if (cairo_region_contains_rectangle(region, &rect) == CAIRO_REGION_OVERLAP_OUT)
-                        continue;
-
-                row_data = find_row_data(row);
-                if (row_data == NULL) {
-                        /* Skip row. */
-                        continue;
-                }
-
-                /* Walk the line.
+                /* Walk the line again to draw the text.
                  * Locate runs of identical attributes within a row, and draw each run using a single draw_cells() call. */
                 item_count = 0;
                 for (col = 0; col < column_count; ) {

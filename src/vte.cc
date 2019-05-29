@@ -269,8 +269,9 @@ Terminal::invalidate_rows(vte::grid::row_t row_start,
         int xend = m_column_count * m_cell_width + 1;
         rect.width = xend - rect.x;
 
-        rect.y = row_to_pixel(row_start) - 1;
-        int yend = row_to_pixel(row_end + 1) + 1;
+        /* Always add at least 1px so the outline block cursor fits */
+        rect.y = row_to_pixel(row_start) - std::max(cell_overflow_top(), 1);
+        int yend = row_to_pixel(row_end + 1) + std::max(cell_overflow_bottom(), 1);
         rect.height = yend - rect.y;
 
 	_vte_debug_print (VTE_DEBUG_UPDATES,
@@ -8791,7 +8792,7 @@ Terminal::draw_rows(VteScreen *screen_,
                     cairo_region_t const* region,
                     vte::grid::row_t start_row,
                     vte::grid::row_t end_row,
-                    gint start_y,
+                    gint start_y, /* must be the start of a row */
                     gint column_width,
                     gint row_height)
 {
@@ -8830,9 +8831,6 @@ Terminal::draw_rows(VteScreen *screen_,
                 if (row_data == nullptr)
                         continue; /* Skip row. FIXME: just paint this row empty? */
 
-                /* Clip to the line, so no drawing over adjacent lines happens */
-                _vte_draw_autoclip_t clipper{m_draw, &rect};
-
                 i = j = 0;
                 /* Walk the line.
                  * Locate runs of identical bg colors within a row, and paint each run as a single rectangle. */
@@ -8869,8 +8867,31 @@ Terminal::draw_rows(VteScreen *screen_,
                          * match the first one in this set. */
                         i = j;
                 } while (i < column_count);
+        }
 
-                /* Walk the line again to draw the text.
+
+        /* Render the text. Text may overdraw on the top and bottom, so enlarge the
+         * rectangle by that amount.
+         */
+        rect = cairo_rectangle_int_t{-m_padding.left,
+                                     start_y - cell_overflow_top(),
+                                     rect_width,
+                                     row_height + cell_overflow_top() + cell_overflow_bottom()};
+
+        for (row = start_row, y = start_y; row < end_row; row++, y += row_height, rect.y = y) {
+                /* Check whether we need to draw this row at all */
+
+                if (cairo_region_contains_rectangle(region, &rect) == CAIRO_REGION_OVERLAP_OUT)
+                        continue;
+
+                row_data = find_row_data(row);
+                if (row_data == NULL)
+                        continue; /* Skip row. */
+
+                /* Ensure that drawing is restricted to the cell (plus the overdraw area) */
+                _vte_draw_autoclip_t clipper{m_draw, &rect};
+
+                /* Walk the line.
                  * Locate runs of identical attributes within a row, and draw each run using a single draw_cells() call. */
                 item_count = 0;
                 for (col = 0; col < column_count; ) {

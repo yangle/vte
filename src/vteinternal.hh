@@ -512,6 +512,22 @@ public:
         glong m_cell_width;
         glong m_cell_height;
 
+        /* We allow the cell's text to draw a bit outside the cell at the top
+         * and bottom. The following two functions return how much is the
+         * maximally allowed overdraw (in px).
+         */
+        inline constexpr auto cell_overflow_top() const noexcept
+        {
+                /* Allow overdrawing up into the underline of the cell on top */
+                return int(m_cell_height - m_underline_position);
+        }
+
+        inline constexpr auto cell_overflow_bottom() const noexcept
+        {
+                /* Allow overdrawing up into the overline of the cell on bottom */
+                return int(m_overline_position + m_overline_thickness);
+        }
+
 	/* Data used when rendering the text which reflects server resources
 	 * and data, which should be dropped when unrealizing and (re)created
 	 * when realizing. */

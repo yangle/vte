@@ -737,8 +737,6 @@ public:
                                 int blink_time,
                                 int blink_timeout) noexcept;
 
-        void expand_rectangle(cairo_rectangle_int_t& rect) const;
-        void paint_area(GdkRectangle const* area);
         void paint_cursor();
         void paint_im_preedit_string();
         void draw_cells(struct _vte_draw_text_request *items,
@@ -769,6 +767,7 @@ public:
                                         int column_width,
                                         int height);
         void draw_rows(VteScreen *screen,
+                       cairo_region_t const* region,
                        vte::grid::row_t start_row,
                        long row_count,
                        gint start_y,

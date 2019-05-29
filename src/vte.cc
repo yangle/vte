@@ -8788,17 +8788,18 @@ Terminal::draw_cells_with_attributes(struct _vte_draw_text_request *items,
  * attributes and bundling them together. */
 void
 Terminal::draw_rows(VteScreen *screen_,
-                              vte::grid::row_t start_row,
-                              vte::grid::row_t end_row,
-                              gint start_y,
-                              gint column_width,
-                              gint row_height)
+                    cairo_region_t const* region,
+                    vte::grid::row_t start_row,
+                    vte::grid::row_t end_row,
+                    gint start_y,
+                    gint column_width,
+                    gint row_height)
 {
         struct _vte_draw_text_request *items;
         vte::grid::row_t row;
         vte::grid::column_t i, j, col;
-        long y;
-        guint fore, nfore, back, nback, deco, ndeco;
+        int y;
+        guint fore = VTE_DEFAULT_FG, nfore, back = VTE_DEFAULT_BG, nback, deco = VTE_DEFAULT_FG, ndeco;
         gboolean hyperlink = FALSE, nhyperlink, hilite = FALSE, nhilite;
         gboolean selected;
         uint32_t attr = 0, nattr;
@@ -8817,8 +8818,18 @@ Terminal::draw_rows(VteScreen *screen_,
          * chopped off by another cell's background, not even across changes of the
          * background or any other attribute.
          * Process each row independently. */
-        for (row = start_row, y = start_y; row < end_row; row++, y += row_height) {
+        int const rect_width = get_allocated_width();
+
+        auto rect = cairo_rectangle_int_t{-m_padding.left, start_y, rect_width, row_height};
+        for (row = start_row, y = start_y; row < end_row; row++, y += row_height, rect.y = y) {
+                /* Check whether we need to draw this row at all */
+                if (cairo_region_contains_rectangle(region, &rect) == CAIRO_REGION_OVERLAP_OUT)
+                        continue;
+
 		row_data = find_row_data(row);
+                if (row_data == nullptr)
+                        continue; /* Skip row. */
+
                 i = j = 0;
                 /* Walk the line.
                  * Locate runs of identical bg colors within a row, and paint each run as a single rectangle. */
@@ -8859,7 +8870,12 @@ Terminal::draw_rows(VteScreen *screen_,
 
 
         /* Render the text. */
-        for (row = start_row, y = start_y; row < end_row; row++, y += row_height) {
+        rect = cairo_rectangle_int_t{-m_padding.left, start_y, rect_width, row_height}; /* reset rect */
+        for (row = start_row, y = start_y; row < end_row; row++, y += row_height, rect.y = y) {
+                /* Check whether we need to draw this row at all */
+                if (cairo_region_contains_rectangle(region, &rect) == CAIRO_REGION_OVERLAP_OUT)
+                        continue;
+
                 row_data = find_row_data(row);
                 if (row_data == NULL) {
                         /* Skip row. */
@@ -8971,75 +8987,6 @@ Terminal::draw_rows(VteScreen *screen_,
                                    column_width, row_height);
                 }
         }
-}
-
-void
-Terminal::expand_rectangle(cairo_rectangle_int_t& rect) const
-{
-	/* increase the paint by one pixel on all sides to force the
-	 * inclusion of neighbouring cells */
-        vte::grid::row_t row = pixel_to_row(MAX(0, rect.y - 1));
-        /* Both the value given by MIN() and row_stop are exclusive.
-         * _vte_terminal_pixel_to_row expects an actual value corresponding
-         * to the bottom visible pixel, hence the - 1 + 1 magic. */
-        vte::grid::row_t row_stop = pixel_to_row(MIN(rect.height + rect.y + 1, m_view_usable_extents.height()) - 1) + 1;
-        if (row_stop <= row)
-                return;
-
-        vte::grid::column_t col = MAX(0, (rect.x - 1) / m_cell_width);
-        vte::grid::column_t col_stop = MIN(howmany(rect.width + rect.x + 1, m_cell_width), m_column_count);
-        if (col_stop <= col)
-                return;
-
-        cairo_rectangle_int_t old_rect = rect;
-        rect.x = col * m_cell_width;
-        rect.width = (col_stop - col) * m_cell_width;
-        rect.y = row_to_pixel(row);
-        rect.height = (row_stop - row) * m_cell_height;
-
-        _vte_debug_print (VTE_DEBUG_UPDATES,
-                          "expand_rectangle"
-                          "	(%d,%d)x(%d,%d) pixels,"
-                          " (%ld,%ld)x(%ld,%ld) cells"
-                          " [(%d,%d)x(%d,%d) pixels]\n",
-                          old_rect.x, old_rect.y, old_rect.width, old_rect.height,
-                          col, row, col_stop - col, row_stop - row,
-                          rect.x, rect.y, rect.width, rect.height);
-}
-
-void
-Terminal::paint_area(GdkRectangle const* area)
-{
-        vte::grid::row_t row, row_stop;
-
-        row = pixel_to_row(MAX(0, area->y));
-        /* Both the value given by MIN() and row_stop are exclusive.
-         * _vte_terminal_pixel_to_row expects an actual value corresponding
-         * to the bottom visible pixel, hence the - 1 + 1 magic. */
-        row_stop = pixel_to_row(MIN(area->height + area->y,
-                                    get_allocated_height() - m_padding.top - m_padding.bottom) - 1) + 1;
-	if (row_stop <= row) {
-		return;
-	}
-	_vte_debug_print (VTE_DEBUG_UPDATES,
-			"paint_area"
-			"	(%d,%d)x(%d,%d) pixels,"
-			" (%ld,%ld)x(%ld,%ld) cells"
-			" [(%ld,%ld)x(%ld,%ld) pixels]\n",
-			area->x, area->y, area->width, area->height,
-                        0L, row, m_column_count, row_stop - row,
-                        0L,
-			row * m_cell_height,
-                        m_column_count * m_cell_width,
-			(row_stop - row) * m_cell_height);
-
-	/* Now we're ready to draw the text.  Iterate over the rows we
-	 * need to draw. */
-	draw_rows(m_screen,
-			      row, row_stop,
-			      row_to_pixel(row),
-			      m_cell_width,
-			      m_cell_height);
 }
 
 void
@@ -9322,36 +9269,6 @@ Terminal::widget_draw(cairo_t *cr)
         /* Transform to view coordinates */
         cairo_region_translate(region, -m_padding.left, -m_padding.top);
 
-        cairo_rectangle_int_t *rectangles;
-        int n, n_rectangles;
-        n_rectangles = cairo_region_num_rectangles (region);
-        rectangles = g_new(cairo_rectangle_int_t, n_rectangles);
-        for (n = 0; n < n_rectangles; n++) {
-                cairo_region_get_rectangle (region, n, &rectangles[n]);
-        }
-
-        /* don't bother to enlarge an invalidate all */
-        if (!(n_rectangles == 1
-              && rectangles[0].width == allocated_width
-              && rectangles[0].height == allocated_height)) {
-                cairo_region_t *rr = cairo_region_create ();
-                /* Expand the rectangles so that they cover whole cells,
-                 * to avoid overlapping XY bands.
-                 */
-                for (n = 0; n < n_rectangles; n++) {
-                        expand_rectangle(rectangles[n]);
-                        cairo_region_union_rectangle(rr, &rectangles[n]);
-                }
-                g_free(rectangles);
-
-                n_rectangles = cairo_region_num_rectangles (rr);
-                rectangles = g_new (cairo_rectangle_int_t, n_rectangles);
-                for (n = 0; n < n_rectangles; n++) {
-                        cairo_region_get_rectangle(rr, n, &rectangles[n]);
-                }
-                cairo_region_destroy(rr);
-        }
-
         /* Whether blinking text should be visible now */
         m_text_blink_state = true;
         text_blink_enabled_now = m_text_blink_mode & (m_has_focus ? VTE_TEXT_BLINK_FOCUSED : VTE_TEXT_BLINK_UNFOCUSED);
@@ -9364,20 +9281,14 @@ Terminal::widget_draw(cairo_t *cr)
         m_text_to_blink = false;
 
         /* and now paint them */
-        for (n = 0; n < n_rectangles; n++) {
-                /* paint_area() paints more than asked to (entire rows). Without an individual
-                 * cropping rectangle around each invocation we might end up with text getting
-                 * overstriked with itself, thus appearing bolder. See vte#4.
-                 * TODO: refactor so that paint_area() is called at most once for each row, see vte#56. */
-                cairo_save(cr);
-                cairo_rectangle(cr, rectangles[n].x, rectangles[n].y, rectangles[n].width, rectangles[n].height);
-                cairo_clip(cr);
-
-                paint_area(&rectangles[n]);
-
-                cairo_restore(cr);
-        }
-        g_free (rectangles);
+        auto const first_row = first_displayed_row();
+        draw_rows(m_screen,
+                  region,
+                  first_row,
+                  last_displayed_row() + 1,
+                  row_to_pixel(first_row),
+                  m_cell_width,
+                  m_cell_height);
 
 	paint_im_preedit_string();
 

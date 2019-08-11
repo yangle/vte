@@ -8,7 +8,6 @@ test -z "$srcdir" && srcdir=.
 
 cd "$srcdir"
 mkdir -p m4 >/dev/null 2>&1 || true
-gtkdocize --copy --flavour no-tmpl
 autoreconf --verbose --force --install
 intltoolize --force
 cd -

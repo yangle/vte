@@ -426,8 +426,6 @@ fi
 
 ################################################################################
 
-GTK_DOC_CHECK([1.13],[--flavour no-tmpl])
-
 AC_SUBST([GLIB_PREFIX],[$($PKG_CONFIG --variable=prefix glib-2.0)])
 AC_SUBST([GTK_PREFIX],[$($PKG_CONFIG --variable=prefix gtk+-$GTK_API_VERSION)])
 
@@ -455,9 +453,6 @@ bindings/gir/Makefile
 bindings/vala/Makefile
 perf/Makefile
 po/Makefile.in
-doc/Makefile
-doc/reference/Makefile
-doc/reference/version.xml
 glade/Makefile
 ])
 

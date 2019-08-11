@@ -22,7 +22,6 @@ pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = vte-$(VTE_API_VERSION).pc
 
 DISTCHECK_CONFIGURE_FLAGS = \
-	--enable-gtk-doc \
 	--enable-introspection \
 	--disable-vala \
 	--disable-test-application \

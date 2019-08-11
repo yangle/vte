@@ -449,3 +449,4 @@ dist_profile_DATA = vte.sh
 .DELETE_ON_ERROR:
 
 -include $(top_srcdir)/git.mk
+sources: $(BUILT_SOURCES)
